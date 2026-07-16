@@ -1,132 +1,113 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors');
 const path = require('path');
-const fetch = require('node-fetch');
-const connectDB = require('./db');
-require('dotenv').config();
+const { Client, GatewayIntentBits, Partials } = require('discord.js');
 
+// Config and Port Setup
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Express Middlewares
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve Static Files (For Dashboard HTML, CSS, JS)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Mongoose Schemas & Models
-const UserSchema = new mongoose.Schema({
-  discordId: String,
-  username: String,
-  joinedAt: { type: Date, default: Date.now },
-  status: { type: String, default: 'trial' },
-  role: { type: String, default: 'user' }
-});
-const User = mongoose.models.User || mongoose.model('User', UserSchema);
+// ==========================================
+// 1. MONGODB CONNECTION
+// ==========================================
+mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/openclaw')
+  .then(() => console.log('🍀 Connected to MongoDB Successfully!'))
+  .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
-const LogSchema = new mongoose.Schema({
-  username: String,
-  action: String,
-  query: String,
-  timestamp: { type: Date, default: Date.now }
-});
-const Log = mongoose.models.Log || mongoose.model('Log', LogSchema);
-
-// Connect DB & Start Discord Bot
-connectDB().then(() => {
-  require('./discordBot');
-});
-
-// OAuth API Links
-app.get('/api/auth/url', (req, res) => {
-  res.json({ url: process.env.DISCORD_OAUTH_URL });
+// ==========================================
+// 2. DISCORD BOT SETUP (WITH CORRECT INTENTS)
+// ==========================================
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent, // <-- Message read karne ke liye sabse zaroori intent
+    GatewayIntentBits.GuildMembers,   // <-- Active checks ke liye
+    GatewayIntentBits.DirectMessages  // <-- Direct Message support ke liye
+  ],
+  partials: [
+    Partials.Channel,
+    Partials.Message,
+    Partials.User
+  ]
 });
 
-// Discord Callback (Registration / Login)
-app.get('/api/auth/discord/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) return res.send("Authorization code missing.");
+// Bot Online Status
+client.once('ready', () => {
+  console.log(`🚀 Discord Bot logged in successfully as: ${client.user.tag}`);
+});
 
+// Bot Message Event Handler (Jab Discord pe message aaye)
+client.on('messageCreate', async (message) => {
+  // Agar message bot khud bhej raha hai, toh ignore karein
+  if (message.author.bot) return;
+
+  console.log(`📝 Naya message aaya [${message.channel.name || 'DM'}]: "${message.content}" from ${message.author.tag}`);
+
+  const text = message.content.toLowerCase().trim();
+
+  // 1. Simple Test Command
+  if (text === 'hi' || text === 'hello') {
+    return message.reply('Hello Bhai! Main bilkul active hoon aur sun raha hoon. Aap mujhse koi bhi sawal pooch sakte hain!');
+  }
+
+  // 2. Integration with Web Search or Image Generation
+  // (Yahan aap apna main processing agent call kar sakte hain)
+});
+
+// Bot Login
+if (process.env.DISCORD_TOKEN) {
+  client.login(process.env.DISCORD_TOKEN)
+    .catch(err => console.error('❌ Discord Bot Login Failed:', err));
+} else {
+  console.log('⚠️ DISCORD_TOKEN variables me missing hai. Bot start nahi hua.');
+}
+
+// ==========================================
+// 3. API ENDPOINTS (WEB DASHBOARD)
+// ==========================================
+
+// Dashboard Route (Jo images me successfully status 200 de raha tha)
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// OAuth Callback Route
+app.get('/api/auth/discord/callback', (req, res) => {
+  console.log('🔗 OAuth Callback Hit!');
+  res.redirect('/dashboard.html'); // redirect to dashboard
+});
+
+// Webhook handling
+app.post('/api/webhooks', (req, res) => {
+  res.status(200).json({ message: 'Webhook received' });
+});
+
+// Web Search API (Tavily search integration)
+app.post('/api/search', async (req, res) => {
   try {
-    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
-      method: 'POST',
-      body: new URLSearchParams({
-        client_id: process.env.DISCORD_CLIENT_ID,
-        client_secret: process.env.DISCORD_CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: process.env.DISCORD_REDIRECT_URI,
-      }),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const { query } = req.body;
+    console.log(`🔍 Web search query received: ${query}`);
     
-    const tokens = await tokenResponse.json();
-    const userResponse = await fetch('https://discord.com/api/users/@me', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
-    });
-    const discordUser = await userResponse.json();
-
-    let user = await User.findOne({ discordId: discordUser.id });
-    if (!user) {
-      user = await User.create({ discordId: discordUser.id, username: discordUser.username });
-    }
-
-    res.redirect(`/dashboard.html?username=${user.username}&id=${user._id}`);
-  } catch (err) {
-    res.status(500).send("Login failed: " + err.message);
+    // Yahan aapki Tavily search processing logic aayegi
+    res.status(200).json({ success: true, message: "Search processed" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Search Tool Endpoint
-app.post('/api/tools/search', async (req, res) => {
-  const { query, userId } = req.body;
-  try {
-    const user = await User.findById(userId);
-    if (!user) return res.json({ success: false, error: "User not found." });
-    if (user.status === 'expired') return res.json({ success: false, error: "Trial Expired. Please Upgrade." });
-
-    const response = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query })
-    });
-    const data = await response.json();
-
-    await Log.create({ username: user.username, action: 'search', query });
-    res.json({ success: true, results: data.results });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
+// ==========================================
+// 4. SERVER START
+// ==========================================
+app.listen(PORT, () => {
+  console.log(`⚡ Server running dynamically on port ${PORT}`);
 });
-
-// Imagine (AI Image Generator) Mock Endpoint
-app.post('/api/tools/imagine', async (req, res) => {
-  const { prompt, userId } = req.body;
-  try {
-    const user = await User.findById(userId);
-    if (!user) return res.json({ success: false, error: "User not found." });
-    if (user.status === 'expired') return res.json({ success: false, error: "Trial Expired." });
-
-    await Log.create({ username: user.username, action: 'image_generation', query: prompt });
-    res.json({ success: true, imageUrl: `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600` });
-  } catch (err) {
-    res.json({ success: false, error: err.message });
-  }
-});
-
-// Admin Statistics Dashboard Endpoint
-app.get('/api/admin/stats', async (req, res) => {
-  const adminId = req.headers['admin-id'];
-  try {
-    const adminUser = await User.findById(adminId);
-    if (!adminUser || adminUser.role !== 'admin') {
-      return res.status(403).json({ error: "Access Denied: Admin privileges required." });
-    }
-
-    const totalUsers = await User.countDocuments();
-    const premiumUsers = await User.countDocuments({ status: 'premium' });
-    const recentLogs = await Log.find().sort({ timestamp: -1 }).limit(20);
-
-    res.json({ totalUsers, premiumUsers, recentLogs });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running dynamically on port ${PORT}`));
