@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>OpenClaw Agent Platform</title>
+    <link rel='stylesheet' href='dashboard.css'>
+</head>
+<body>
+    <div class='container'>
+        <h1>🦅 OpenClaw Agent Hub</h1>
+        <p>Connect your web dashboard with your Discord community server in one click.</p>
+        <a id='discord-login-btn' href='#' class='btn'>🔗 Add to Discord / Login</a>
+    </div>
+    <script>
+        async function setupLoginButton() {
+            try {
+                const response = await fetch('/api/auth/url');
+                const data = await response.json();
+                document.getElementById('discord-login-btn').href = data.url;
+            } catch (err) {
+                document.getElementById('discord-login-btn').onclick = () => {
+                    alert('System error: Unable to fetch authorization URL from server.');
+                };
+            }
+        }
+        setupLoginButton();
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'><title>Admin Portal</title>
+    <link rel='stylesheet' href='dashboard.css'>
+</head>
+<body>
+    <div class='container'>
+        <h2>🛡️ Control Panel</h2>
+        <div class='tool-box'>
+            <p>Total Users: <span id='tu'>-</span> | Premium: <span id='pu'>-</span></p>
+            <h3>Live Activity Logs</h3>
+            <div class='results' id='logs'>Loading logs...</div>
+        </div>
+    </div>
+    <script>
+        const uid = new URLSearchParams(window.location.search).get('id');
+        fetch('/api/admin/stats', { headers: { 'admin-id': uid } })
+        .then(r => r.json()).then(d => {
+            if(d.error) return document.body.innerHTML = `<h1>${d.error}</h1>`;
+            document.getElementById('tu').innerText = d.totalUsers;
+            document.getElementById('pu').innerText = d.premiumUsers;
+            document.getElementById('logs').innerText = JSON.stringify(d.recentLogs, null, 2);
+        });
+    </script>
+</body>
+</html>

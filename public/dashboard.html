@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'><title>Dashboard</title>
+    <link rel='stylesheet' href='dashboard.css'>
+</head>
+<body>
+    <div class='container'>
+        <h2>🦅 User Dashboard</h2>
+        <div class='tool-box'>
+            <h3>🔍 Web Search</h3>
+            <input type='text' id='sq' placeholder='Ask anything...'><button onclick='search()'>Search</button>
+            <div class='results' id='sr'></div>
+        </div>
+        <div class='tool-box'>
+            <h3>🎨 AI Image Generator</h3>
+            <input type='text' id='iq' placeholder='Describe image...'><button onclick='imagine()'>Generate</button>
+            <div class='results' id='ir'></div>
+        </div>
+    </div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('id');
+        async function search() {
+            const r = await fetch('/api/tools/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ query: document.getElementById('sq').value, userId: uid }) });
+            const d = await r.json(); document.getElementById('sr').innerText = d.success ? JSON.stringify(d.results, null, 2) : d.error;
+        }
+        async function imagine() {
+            const r = await fetch('/api/tools/imagine', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('iq').value, userId: uid }) });
+            const d = await r.json(); document.getElementById('ir').innerHTML = d.success ? `<img src='${d.imageUrl}' width='100%'>` : d.error;
+        }
+    </script>
+</body>
+</html>
