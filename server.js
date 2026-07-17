@@ -22,17 +22,36 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ==========================================
 // 1. MONGODB CONNECTION
 // ==========================================
-mongoose.connect(process.env.MONGO_DB_URI || 'mongodb+srv://basit420:basit12345@cluster0.43v1nov.mongodb.net/openclaw?appName=Cluster0')
+// Fix: Railway me MONGODB_URI hota hai, code me dono handle kar diye hain
+const mongoURI = process.env.MONGODB_URI || process.env.MONGO_DB_URI || 'mongodb+srv://basit420:basit12345@cluster0.43v1nov.mongodb.net/openclaw?appName=Cluster0';
+
+mongoose.connect(mongoURI)
   .then(() => console.log('🍀 Connected to MongoDB Successfully!'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 // ==========================================
-// 2. API ENDPOINTS (WEB DASHBOARD)
+// 2. API ENDPOINTS (WEB DASHBOARD & ADMIN PANEL)
 // ==========================================
 
 // Dashboard Route
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Admin Panel Route (🔒 Secure Basic Authentication)
+app.get('/admin', (req, res) => {
+  const auth = { login: 'admin', password: process.env.ADMIN_PASSWORD || 'basit123' };
+  const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+  const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+
+  if (login && password && login === auth.login && password === auth.password) {
+    // Agar password sahi hai toh admin.html file bhejo
+    return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  }
+
+  // Agar password galat ya missing hai toh popup window dikhao
+  res.set('WWW-Authenticate', 'Basic realm="401"');
+  res.status(401).send('Authentication required. Admin panel access denied.');
 });
 
 // Discord OAuth authorization URL endpoint used by the login button
