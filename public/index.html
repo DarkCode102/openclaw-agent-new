@@ -16,7 +16,13 @@
         async function setupLoginButton() {
             try {
                 const response = await fetch('/api/auth/url');
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
                 const data = await response.json();
+                if (!data.url) {
+                    throw new Error('Authorization URL missing');
+                }
                 document.getElementById('discord-login-btn').href = data.url;
             } catch (err) {
                 document.getElementById('discord-login-btn').onclick = () => {

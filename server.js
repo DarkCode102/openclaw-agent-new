@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -19,7 +20,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ==========================================
 // 1. MONGODB CONNECTION
 // ==========================================
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/openclaw')
+mongoose.connect(process.env.MONGO_DB_URI || 'mongodb://127.0.0.1:27017/openclaw')
   .then(() => console.log('🍀 Connected to MongoDB Successfully!'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
@@ -79,6 +80,27 @@ if (process.env.DISCORD_TOKEN) {
 // Dashboard Route (Jo images me successfully status 200 de raha tha)
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Discord OAuth authorization URL endpoint used by the login button
+app.get('/api/auth/url', (req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID || process.env.DISCORD_BOT_CLIENT_ID;
+  const redirectUri = process.env.DISCORD_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/discord/callback`;
+
+  if (!clientId) {
+    console.error('❌ Discord client ID missing. Set DISCORD_CLIENT_ID or DISCORD_BOT_CLIENT_ID in your environment.');
+    return res.status(500).json({ error: 'Discord client ID is not configured.' });
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'identify email',
+    prompt: 'consent'
+  });
+
+  res.json({ url: `https://discord.com/api/oauth2/authorize?${params.toString()}` });
 });
 
 // OAuth Callback Route
