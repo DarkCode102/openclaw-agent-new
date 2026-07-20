@@ -47,19 +47,17 @@ app.get('/admin', (req, res) => {
   res.status(401).send('Authentication required. Admin panel access denied.');
 });
 
-// FIXED: Tavily API response ko string text format me convert kar diya hai taake JSON show na ho
+// FINAL FIXED: Clean string formatting logic with automated nested JSON parser
 app.post(['/api/search', '/api/tools/search'], async (req, res) => {
   try {
     let { query } = req.body;
     if (!query) return res.status(400).json({ success: false, error: 'Query missing hai.' });
     if (!process.env.TAVILY_API_KEY) return res.status(400).json({ success: false, error: 'Tavily Key is missing.' });
 
-    // Agar user input mein '!agent ' likh de toh use handle aur remove karne ke liye
     if (query.toLowerCase().startsWith('!agent ')) {
       query = query.slice(7);
     }
 
-    // Tavily official body-key specifications payload structure
     const response = await axios.post('https://api.tavily.com/search', {
       api_key: process.env.TAVILY_API_KEY,
       query: query.trim(),
@@ -73,12 +71,30 @@ app.post(['/api/search', '/api/tools/search'], async (req, res) => {
 
     const rawResults = response.data.results || [];
     
-    // JSON arrays ko clean readable string/text me convert karne ka process
+    // Saare text se \n khatam kar ke clean layout banane ka process
     const formattedText = rawResults.map((result, index) => {
-      return `${index + 1}. Title: ${result.title}\nURL: ${result.url}\nContent: ${result.content}\n\n`;
-    }).join('');
+      let cleanContent = result.content;
+      
+      // Agar weather ka nested JSON kachra text ban kar aa raha ho toh use parse karein
+      if (cleanContent.startsWith('{') || cleanContent.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(cleanContent);
+          if (parsed.current) {
+            cleanContent = `Temp: ${parsed.current.temp_c}°C, Condition: ${parsed.current.condition?.text}, Humidity: ${parsed.current.humidity}%`;
+          }
+        } catch (e) {
+          cleanContent = cleanContent.replace(/[\r\n]+/g, ' ');
+        }
+      } else {
+        cleanContent = cleanContent.replace(/[\r\n]+/g, ' ');
+      }
 
-    // Frontend ko direct formatted text bhej rahe hain results field me
+      const cleanTitle = result.title.replace(/[\r\n]+/g, ' ');
+      const cleanUrl = result.url.replace(/[\r\n]+/g, ' ');
+
+      return `[${index + 1}] ${cleanTitle.toUpperCase()} ➔ Link: ${cleanUrl} ➔ Info: ${cleanContent}`;
+    }).join(' *** ');
+
     res.status(200).json({ 
       success: true, 
       results: formattedText || "Koi results nahi mile." 
