@@ -3,19 +3,28 @@ const cheerio = require('cheerio');
 const converter = require('./tools/converter');
 require('dotenv').config();
 
+// FIXED: Tavily API key format authorization headers mein convert kar di hai
 async function searchWeb(query) {
   if (!process.env.TAVILY_API_KEY) {
     console.log("⚠️ Tavily API Key missing, falling back to basic knowledge.");
     return "Search tool not configured.";
   }
   try {
-    const response = await axios.post('https://api.tavily.com/search', {
-      api_key: process.env.TAVILY_API_KEY,
-      query: query,
-      search_depth: "smart"
-    });
+    const response = await axios.post('https://api.tavily.com/search', 
+      {
+        query: query,
+        search_depth: "smart"
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.TAVILY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
     return response.data.results.map(r => `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}\n`).join('\n');
   } catch (err) {
+    console.error("Orchestrator Search Error:", err.response?.data || err.message);
     return `Search Error: ${err.message}`;
   }
 }

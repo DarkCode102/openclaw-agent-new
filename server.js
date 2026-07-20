@@ -47,20 +47,29 @@ app.get('/admin', (req, res) => {
   res.status(401).send('Authentication required. Admin panel access denied.');
 });
 
+// FIXED: Tavily API key headers mein add kar di hai status 400 error hatane ke liye
 app.post(['/api/search', '/api/tools/search'], async (req, res) => {
   try {
     const { query } = req.body;
     if (!query) return res.status(400).json({ success: false, error: 'Query missing hai.' });
     if (!process.env.TAVILY_API_KEY) return res.status(400).json({ success: false, error: 'Tavily Key is missing.' });
 
-    const response = await axios.post('https://api.tavily.com/search', {
-      api_key: process.env.TAVILY_API_KEY,
-      query,
-      search_depth: "smart"
-    });
+    const response = await axios.post('https://api.tavily.com/search', 
+      {
+        query,
+        search_depth: "smart"
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.TAVILY_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
     res.status(200).json({ success: true, results: response.data.results });
   } catch (error) {
+    console.error("Tavily Route Error:", error.response?.data || error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
