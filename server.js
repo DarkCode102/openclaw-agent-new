@@ -47,7 +47,7 @@ app.get('/admin', (req, res) => {
   res.status(401).send('Authentication required. Admin panel access denied.');
 });
 
-// FINAL FIXED: Clean string formatting logic with automated nested JSON parser
+// FINAL PERFECTED: Weather JSON parser + Clean line breaks formatting
 app.post(['/api/search', '/api/tools/search'], async (req, res) => {
   try {
     let { query } = req.body;
@@ -71,29 +71,29 @@ app.post(['/api/search', '/api/tools/search'], async (req, res) => {
 
     const rawResults = response.data.results || [];
     
-    // Saare text se \n khatam kar ke clean layout banane ka process
     const formattedText = rawResults.map((result, index) => {
       let cleanContent = result.content;
       
-      // Agar weather ka nested JSON kachra text ban kar aa raha ho toh use parse karein
-      if (cleanContent.startsWith('{') || cleanContent.startsWith('[')) {
-        try {
-          const parsed = JSON.parse(cleanContent);
-          if (parsed.current) {
-            cleanContent = `Temp: ${parsed.current.temp_c}°C, Condition: ${parsed.current.condition?.text}, Humidity: ${parsed.current.humidity}%`;
-          }
-        } catch (e) {
-          cleanContent = cleanContent.replace(/[\r\n]+/g, ' ');
+      // Weather API ke single/double quotes wale kachre ko saaf karne ke liye regex
+      if (cleanContent.includes("'temp_c'") || cleanContent.includes('"temp_c"')) {
+        const tempMatch = cleanContent.match(/['"]temp_c['"]:\s*([0-9.]+)/);
+        const textMatch = cleanContent.match(/['"]text['"]:\s*['"]([^'"]+)['"]/);
+        const humidMatch = cleanContent.match(/['"]humidity['"]:\s*([0-9.]+)/);
+        
+        if (tempMatch && textMatch) {
+          cleanContent = `Temperature: ${tempMatch[1]}°C, Condition: ${textMatch[1]}${humidMatch ? `, Humidity: ${humidMatch[1]}%` : ''}`;
+        } else {
+          cleanContent = cleanContent.replace(/[{}\[\]'"]/g, ' ').replace(/[\r\n]+/g, ' ').trim();
         }
       } else {
-        cleanContent = cleanContent.replace(/[\r\n]+/g, ' ');
+        cleanContent = cleanContent.replace(/[\r\n]+/g, ' ').trim();
       }
 
-      const cleanTitle = result.title.replace(/[\r\n]+/g, ' ');
-      const cleanUrl = result.url.replace(/[\r\n]+/g, ' ');
+      const cleanTitle = result.title.replace(/[\r\n]+/g, ' ').trim();
+      const cleanUrl = result.url.replace(/[\r\n]+/g, ' ').trim();
 
-      return `[${index + 1}] ${cleanTitle.toUpperCase()} ➔ Link: ${cleanUrl} ➔ Info: ${cleanContent}`;
-    }).join(' *** ');
+      return `[${index + 1}] ${cleanTitle.toUpperCase()}\nLink: ${cleanUrl}\nInfo: ${cleanContent}\n`;
+    }).join('\n');
 
     res.status(200).json({ 
       success: true, 
