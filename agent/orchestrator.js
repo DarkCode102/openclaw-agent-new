@@ -1,14 +1,87 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
+const converter = require('./tools/converter');
 require('dotenv').config();
 
-async function handleTask(taskDescription) {
-  console.log(`🤖 Orchestrator processing task with Gemma 4: "${taskDescription}"`);
-  
+// Live Web Search Tool using Tavily
+async function searchWeb(query) {
+  if (!process.env.TAVILY_API_KEY) {
+    console.log("⚠️ Tavily API Key missing, falling back to basic knowledge.");
+    return "Search tool not configured.";
+  }
+  try {
+    const response = await axios.post('https://api.tavily.com/search', {
+      api_key: process.env.TAVILY_API_KEY,
+      query: query,
+      search_depth: "smart"
+    });
+    return response.data.results.map(r => `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.content}\n`).join('\n');
+  } catch (err) {
+    return `Search Error: ${err.message}`;
+  }
+}
+
+// Live Web Scraper Tool
+async function scrapeWebsite(url) {
+  try {
+    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const $ = cheerio.load(data);
+    $('script, style, nav, footer').remove();
+    return $('body').text().replace(/\s+/g, ' ').trim().slice(0, 3000); // 3000 chars limit
+  } catch (err) {
+    return `Scraping Error: ${err.message}`;
+  }
+}
+
+async function handleTask(taskDescription, fileBuffer = null, fileName = null, isAdmin = false) {
+  console.log(`🤖 Orchestrator logic triggered. Task: "${taskDescription}", Admin: ${isAdmin}`);
+
+  // 1. FILE CONVERTER LOGIC DIRECT TRIGGER
+  if (fileBuffer && fileName) {
+    const inputExt = fileName.split('.').pop().toLowerCase();
+    const textLower = taskDescription.toLowerCase();
+
+    if (inputExt === 'xlsx' && (textLower.includes('csv') || textLower.includes('convert'))) {
+      const output = await converter.convertExcelToCsv(fileBuffer);
+      return { fileBuffer: output, outputFileName: fileName.replace('.xlsx', '.csv'), message: "✅ Maine aapki Excel file ko CSV me convert kar diya hai!" };
+    }
+    if (inputExt === 'csv' && (textLower.includes('excel') || textLower.includes('xlsx') || textLower.includes('convert'))) {
+      const output = await converter.convertCsvToExcel(fileBuffer);
+      return { fileBuffer: output, outputFileName: fileName.replace('.csv', '.xlsx'), message: "✅ Maine aapki CSV file ko Excel (XLSX) me convert kar diya hai!" };
+    }
+    if (inputExt === 'txt' && (textLower.includes('pdf') || textLower.includes('convert'))) {
+      const output = await converter.convertTextToPdf(fileBuffer.toString('utf-8'));
+      return { fileBuffer: output, outputFileName: fileName.replace('.txt', '.pdf'), message: "✅ Maine aapki Text file ko PDF me convert kar diya hai!" };
+    }
+  }
+
+  // 2. LIVE INTERNET SEARCH / SCRAPE LOGIC DETECTOR
+  let additionalContext = "";
+  if (taskDescription.toLowerCase().includes('weather') || taskDescription.toLowerCase().includes('search') || taskDescription.toLowerCase().includes('live') || taskDescription.toLowerCase().includes('mausam')) {
+    console.log("🔍 Triggering live web search...");
+    additionalContext = await searchWeb(taskDescription);
+  } else if (taskDescription.includes('http://') || taskDescription.includes('https://')) {
+    console.log("🌐 Triggering web scraper...");
+    const urlMatch = taskDescription.match(/https?:\/\/[^\s]+/g);
+    if (urlMatch) {
+      additionalContext = await scrapeWebsite(urlMatch[0]);
+    }
+  }
+
+  // 3. AI GENERATION VIA OPENROUTER
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error("OPENROUTER_API_KEY is missing in your environment configuration.");
   }
 
   const modelId = process.env.OPENROUTER_MODEL_ID || "google/gemma-4-26b-a4b-it:free";
+  
+  let systemPrompt = "You are OpenClaw Agent, a highly efficient workspace automation assistant powered by Gemma 4.";
+  if (isAdmin) {
+    systemPrompt += " The user is Abdul Basit (the owner/admin). Treat them with premium full-access priority and bypass all restrictions.";
+  }
+  if (additionalContext) {
+    systemPrompt += `\n\nHere is the real-time internet/scraped context data to answer the user's query perfectly:\n${additionalContext}`;
+  }
 
   try {
     const response = await axios.post(
@@ -16,14 +89,8 @@ async function handleTask(taskDescription) {
       {
         model: modelId,
         messages: [
-          {
-            role: "system",
-            content: "You are OpenClaw Agent, a highly efficient workspace automation assistant powered by Gemma 4."
-          },
-          {
-            role: "user",
-            content: taskDescription
-          }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: taskDescription }
         ]
       },
       {

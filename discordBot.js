@@ -1,5 +1,6 @@
-const { Client, GatewayIntentBits, Partials } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, AttachmentBuilder } = require('discord.js');
 const { handleTask } = require('./agent/orchestrator');
+const axios = require('axios');
 require('dotenv').config();
 
 const client = new Client({
@@ -26,7 +27,12 @@ client.on('messageCreate', async (message) => {
 
   console.log(`📝 Naya message aaya [${message.channel.name || 'DM'}]: "${message.content}" from ${message.author.tag}`);
 
-  // Dono tareeqon ko support karega (Chahe !agent likhein ya na likhein)
+  // Admin Premium Bypass Check
+  const isAdmin = message.author.tag === 'abdulbasit0509' || message.author.username === 'abdulbasit0509';
+  if (isAdmin) {
+    console.log(`👑 Admin Abdul Basit detected! Premium trial bypass activated.`);
+  }
+
   let task = message.content.trim();
   let isAgentCommand = false;
 
@@ -35,19 +41,42 @@ client.on('messageCreate', async (message) => {
     isAgentCommand = true;
   }
 
-  // Agar simple hi/hello hai toh direct reply
+  // Simple Greetings
   if (task.toLowerCase() === 'hi' || task.toLowerCase() === 'hello') {
-    return message.reply('Hello Bhai! Main bilkul active hoon aur sun raha hoon. Aap mujhse koi bhi sawal pooch sakte hain!');
+    return message.reply('Hello Bhai! Main bilkul active hoon aur sun raha hoon. Aap mujhse koi bhi sawal ya file conversion ka kaam pooch sakte hain!');
   }
 
-  // AI Agent Processing
-  if (isAgentCommand || message.channel.type === 1) { // !agent command ho ya DM ho
+  // AI Agent & File Processing
+  if (isAgentCommand || message.channel.type === 1 || message.attachments.size > 0) {
     await message.channel.send('⚙️ OpenClaw Agent is processing your request...');
     
     try {
+      let fileBuffer = null;
+      let fileName = null;
+
+      // Agar user ne koi file attach ki hai
+      if (message.attachments.size > 0) {
+        const attachment = message.attachments.first();
+        fileName = attachment.name;
+        const response = await axios.get(attachment.url, { responseType: 'arraybuffer' });
+        fileBuffer = Buffer.from(response.data);
+        console.log(`📁 File attachment receive hui: ${fileName}`);
+      }
+
       console.log(`🧠 AI Agent is processing task: "${task}"`);
-      const response = await handleTask(task);
-      await message.reply(response);
+      
+      // Orchestrator ko input bhej rahe hain (task, file info, aur admin status)
+      const agentResponse = await handleTask(task, fileBuffer, fileName, isAdmin);
+
+      // Agar response me converted file buffer aata hai
+      if (agentResponse && agentResponse.fileBuffer) {
+        const attachment = new AttachmentBuilder(agentResponse.fileBuffer, { name: agentResponse.outputFileName });
+        await message.reply({ content: agentResponse.message, files: [attachment] });
+      } else {
+        // Normal text response
+        await message.reply(agentResponse);
+      }
+
     } catch (err) {
       console.error("❌ Actual Bot Error:", err);
       await message.reply(`❌ Error: ${err.message}`);
