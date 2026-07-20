@@ -47,7 +47,7 @@ app.get('/admin', (req, res) => {
   res.status(401).send('Authentication required. Admin panel access denied.');
 });
 
-// FIXED: Tavily API key payload integration aur '!agent ' prefix cleanup filter add kar diya hai
+// FIXED: Tavily API response ko string text format me convert kar diya hai taake JSON show na ho
 app.post(['/api/search', '/api/tools/search'], async (req, res) => {
   try {
     let { query } = req.body;
@@ -71,7 +71,18 @@ app.post(['/api/search', '/api/tools/search'], async (req, res) => {
       }
     });
 
-    res.status(200).json({ success: true, results: response.data.results || [] });
+    const rawResults = response.data.results || [];
+    
+    // JSON arrays ko clean readable string/text me convert karne ka process
+    const formattedText = rawResults.map((result, index) => {
+      return `${index + 1}. Title: ${result.title}\nURL: ${result.url}\nContent: ${result.content}\n\n`;
+    }).join('');
+
+    // Frontend ko direct formatted text bhej rahe hain results field me
+    res.status(200).json({ 
+      success: true, 
+      results: formattedText || "Koi results nahi mile." 
+    });
   } catch (error) {
     console.error("Tavily Route Error:", error.response?.data || error.message);
     res.status(500).json({ success: false, error: error.message });
