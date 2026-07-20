@@ -27,8 +27,8 @@ client.on('messageCreate', async (message) => {
 
   console.log(`📝 Naya message aaya [${message.channel.name || 'DM'}]: "${message.content}" from ${message.author.tag}`);
 
-  // Admin Premium Bypass Check
-  const isAdmin = message.author.tag === 'abdulbasit0509' || message.author.username === 'abdulbasit0509';
+  // Pure Admin Premium Bypass Verification
+  const isAdmin = message.author.username === 'abdulbasit0509';
   if (isAdmin) {
     console.log(`👑 Admin Abdul Basit detected! Premium trial bypass activated.`);
   }
@@ -41,20 +41,20 @@ client.on('messageCreate', async (message) => {
     isAgentCommand = true;
   }
 
-  // Simple Greetings
+  // Simple Greetings System
   if (task.toLowerCase() === 'hi' || task.toLowerCase() === 'hello') {
     return message.reply('Hello Bhai! Main bilkul active hoon aur sun raha hoon. Aap mujhse koi bhi sawal ya file conversion ka kaam pooch sakte hain!');
   }
 
-  // AI Agent & File Processing
+  // AI Agent & File Processing Framework
   if (isAgentCommand || message.channel.type === 1 || message.attachments.size > 0) {
-    await message.channel.send('⚙️ OpenClaw Agent is processing your request...');
+    const processingMessage = await message.channel.send('⚙️ OpenClaw Agent is processing your request...');
     
     try {
       let fileBuffer = null;
       let fileName = null;
 
-      // Agar user ne koi file attach ki hai
+      // Attachment handling block
       if (message.attachments.size > 0) {
         const attachment = message.attachments.first();
         fileName = attachment.name;
@@ -65,21 +65,22 @@ client.on('messageCreate', async (message) => {
 
       console.log(`🧠 AI Agent is processing task: "${task}"`);
       
-      // Orchestrator ko input bhej rahe hain (task, file info, aur admin status)
       const agentResponse = await handleTask(task, fileBuffer, fileName, isAdmin);
 
-      // Agar response me converted file buffer aata hai
+      // Agar response object streams me converted file validation milti hai
       if (agentResponse && agentResponse.fileBuffer) {
         const attachment = new AttachmentBuilder(agentResponse.fileBuffer, { name: agentResponse.outputFileName });
         await message.reply({ content: agentResponse.message, files: [attachment] });
       } else {
-        // Normal text response
-        await message.reply(agentResponse);
+        await message.reply(agentResponse || "Processing complete with no output content.");
       }
 
     } catch (err) {
       console.error("❌ Actual Bot Error:", err);
       await message.reply(`❌ Error: ${err.message}`);
+    } finally {
+      // Clean target processing message stream
+      if (processingMessage.deletable) await processingMessage.delete().catch(() => null);
     }
   }
 });

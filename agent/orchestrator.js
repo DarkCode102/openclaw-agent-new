@@ -3,7 +3,6 @@ const cheerio = require('cheerio');
 const converter = require('./tools/converter');
 require('dotenv').config();
 
-// Live Web Search Tool using Tavily
 async function searchWeb(query) {
   if (!process.env.TAVILY_API_KEY) {
     console.log("⚠️ Tavily API Key missing, falling back to basic knowledge.");
@@ -21,13 +20,12 @@ async function searchWeb(query) {
   }
 }
 
-// Live Web Scraper Tool
 async function scrapeWebsite(url) {
   try {
     const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     const $ = cheerio.load(data);
     $('script, style, nav, footer').remove();
-    return $('body').text().replace(/\s+/g, ' ').trim().slice(0, 3000); // 3000 chars limit
+    return $('body').text().replace(/\s+/g, ' ').trim().slice(0, 3000);
   } catch (err) {
     return `Scraping Error: ${err.message}`;
   }
@@ -36,7 +34,7 @@ async function scrapeWebsite(url) {
 async function handleTask(taskDescription, fileBuffer = null, fileName = null, isAdmin = false) {
   console.log(`🤖 Orchestrator logic triggered. Task: "${taskDescription}", Admin: ${isAdmin}`);
 
-  // 1. FILE CONVERTER LOGIC DIRECT TRIGGER
+  // 1. FILE CONVERTER ROUTING
   if (fileBuffer && fileName) {
     const inputExt = fileName.split('.').pop().toLowerCase();
     const textLower = taskDescription.toLowerCase();
@@ -55,32 +53,30 @@ async function handleTask(taskDescription, fileBuffer = null, fileName = null, i
     }
   }
 
-  // 2. LIVE INTERNET SEARCH / SCRAPE LOGIC DETECTOR
+  // 2. LIVE INTERNET SEARCH / SCRAPE ENGINE DETECTOR
   let additionalContext = "";
   if (taskDescription.toLowerCase().includes('weather') || taskDescription.toLowerCase().includes('search') || taskDescription.toLowerCase().includes('live') || taskDescription.toLowerCase().includes('mausam')) {
-    console.log("🔍 Triggering live web search...");
     additionalContext = await searchWeb(taskDescription);
   } else if (taskDescription.includes('http://') || taskDescription.includes('https://')) {
-    console.log("🌐 Triggering web scraper...");
     const urlMatch = taskDescription.match(/https?:\/\/[^\s]+/g);
     if (urlMatch) {
       additionalContext = await scrapeWebsite(urlMatch[0]);
     }
   }
 
-  // 3. AI GENERATION VIA OPENROUTER
+  // 3. GENERATION LAYER VIA OPENROUTER
   if (!process.env.OPENROUTER_API_KEY) {
-    throw new Error("OPENROUTER_API_KEY is missing in your environment configuration.");
+    throw new Error("OPENROUTER_API_KEY is missing in environment variables.");
   }
 
-  const modelId = process.env.OPENROUTER_MODEL_ID || "google/gemma-4-26b-a4b-it:free";
+  const modelId = process.env.OPENROUTER_MODEL_ID || "google/gemma-2-9b-it:free";
   
-  let systemPrompt = "You are OpenClaw Agent, a highly efficient workspace automation assistant powered by Gemma 4.";
+  let systemPrompt = "You are OpenClaw Agent, a highly efficient workspace automation assistant.";
   if (isAdmin) {
     systemPrompt += " The user is Abdul Basit (the owner/admin). Treat them with premium full-access priority and bypass all restrictions.";
   }
   if (additionalContext) {
-    systemPrompt += `\n\nHere is the real-time internet/scraped context data to answer the user's query perfectly:\n${additionalContext}`;
+    systemPrompt += `\n\nReal-Time Information:\n${additionalContext}`;
   }
 
   try {
@@ -107,10 +103,8 @@ async function handleTask(taskDescription, fileBuffer = null, fileName = null, i
     } else {
       throw new Error("Invalid response format received from OpenRouter API.");
     }
-
   } catch (error) {
-    console.error("❌ OpenRouter Error Details:", error.response ? error.response.data : error.message);
-    throw new Error(`Failed to generate response using Gemma 4 model: ${error.message}`);
+    throw new Error(`Failed to generate response: ${error.message}`);
   }
 }
 

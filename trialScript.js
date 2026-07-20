@@ -27,17 +27,19 @@ const checkExpiredTrials = async () => {
   }
 };
 
+// Isolated execution validation architecture
 if (require.main === module) {
-  if (!process.env.MONGODB_URI) {
+  const targetURI = process.env.MONGODB_URI || process.env.MONGO_DB_URI;
+  if (!targetURI) {
     console.error('Missing MONGODB_URI to run trial tracker.');
     process.exit(1);
   }
-  mongoose.connect(process.env.MONGODB_URI)
+  mongoose.connect(targetURI)
     .then(async () => {
       await checkExpiredTrials();
       mongoose.connection.close();
     })
-    .catch(err => console.error(err));
+    .catch(err => console.error("❌ Tracker Engine Boot Error: ", err));
 }
 
 module.exports = { checkExpiredTrials };
