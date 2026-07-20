@@ -34,10 +34,19 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('id');
+        
+        // FIXED: JSON.stringify hata kar innerHTML aur line-break format set kar diya hai
         async function search() {
             const r = await fetch('/api/tools/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ query: document.getElementById('sq').value, userId: uid }) });
-            const d = await r.json(); document.getElementById('sr').innerText = d.success ? JSON.stringify(d.results, null, 2) : d.error;
+            const d = await r.json(); 
+            if (d.success) {
+                // \n ko HTML line breaks (<br>) me convert kar ke direct render kar rahe hain
+                document.getElementById('sr').innerHTML = d.results.replace(/\n/g, '<br>');
+            } else {
+                document.getElementById('sr').innerText = d.error;
+            }
         }
+
         async function imagine() {
             const r = await fetch('/api/tools/imagine', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('iq').value, userId: uid }) });
             const d = await r.json(); document.getElementById('ir').innerHTML = d.success ? `<img src='${d.imageUrl}' width='100%'>` : d.error;
