@@ -17,6 +17,19 @@
             <input type='text' id='iq' placeholder='Describe image...'><button onclick='imagine()'>Generate</button>
             <div class='results' id='ir'></div>
         </div>
+        
+        <!-- NAYA FEATURE: File Converter Bina Purana Code Khraab Kiye -->
+        <div class='tool-box'>
+            <h3>📁 Smart File Converter</h3>
+            <input type='file' id='fileInput' style='margin-bottom: 10px; display: block;'>
+            <select id='formatSelect' style='padding: 5px; background: #1e293b; color: white; border: 1px solid #334155; margin-right: 10px;'>
+                <option value='csv'>Convert to CSV (Excel File)</option>
+                <option value='excel'>Convert to Excel (CSV File)</option>
+                <option value='pdf'>Convert to PDF (Text File)</option>
+            </select>
+            <button onclick='processConversion()'>Convert & Download</button>
+            <div class='results' id='cr' style='margin-top: 10px; color: #10b981;'></div>
+        </div>
     </div>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -28,6 +41,40 @@
         async function imagine() {
             const r = await fetch('/api/tools/imagine', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ prompt: document.getElementById('iq').value, userId: uid }) });
             const d = await r.json(); document.getElementById('ir').innerHTML = d.success ? `<img src='${d.imageUrl}' width='100%'>` : d.error;
+        }
+
+        // Conversion Function
+        async function processConversion() {
+            const fileInput = document.getElementById('fileInput');
+            const format = document.getElementById('formatSelect').value;
+            const status = document.getElementById('cr');
+
+            if (fileInput.files.length === 0) {
+                status.innerText = '⚠️ Meharbani kar ke pehle koi file select karein.';
+                return;
+            }
+
+            status.innerText = "⏳ Processing conversion...";
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('format', format);
+
+            try {
+                const response = await fetch('/api/convert', { method: 'POST', body: formData });
+                if (!response.ok) throw new Error('Conversion failed on server.');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileInput.files[0].name.split('.')[0] + '.' + (format === 'excel' ? 'xlsx' : format);
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                status.innerText = "✅ File successfully converted and downloaded!";
+            } catch (err) {
+                status.innerText = "❌ Error: " + err.message;
+            }
         }
     </script>
 </body>
